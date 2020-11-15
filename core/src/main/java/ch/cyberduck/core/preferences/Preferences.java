@@ -711,10 +711,15 @@ public abstract class Preferences implements Locales {
         this.setDefault("s3.accelerate.prompt", String.valueOf(false));
 
         this.setDefault("s3.versioning.enable", String.valueOf(true));
-        /**
+        /*
          * Reference previous versions in file attributes
          */
         this.setDefault("s3.versioning.references.enable", String.valueOf(false));
+        /*
+         * Standard,Bulk,Expedited
+         */
+        this.setDefault("s3.glacier.restore.tier", "Standard");
+        this.setDefault("s3.glacier.restore.expiration.days", String.valueOf(2));
 
         /*
           A prefix to apply to log file names
@@ -802,6 +807,8 @@ public abstract class Preferences implements Locales {
         // Each part can be anywhere from 100MB to 5GB in size
         this.setDefault("b2.upload.largeobject.size", String.valueOf(100 * 1024L * 1024L));
         this.setDefault("b2.upload.largeobject.size.minimum", String.valueOf(5 * 1024L * 1024L));
+        this.setDefault("b2.copy.largeobject.size", String.valueOf(5 * 1024L * 1024L)); // 5MB
+        this.setDefault("b2.copy.largeobject.threshold", String.valueOf(10 * 1024L * 1024L)); // 10MB
 
         this.setDefault("b2.metadata.default", StringUtils.EMPTY);
 
@@ -811,14 +818,14 @@ public abstract class Preferences implements Locales {
         // Run missing file keys in bulk feature after upload
         this.setDefault("sds.encryption.missingkeys.upload", String.valueOf(true));
         this.setDefault("sds.encryption.missingkeys.scheduler.period", String.valueOf(120000)); // 2 minutes
-        this.setDefault("sds.encryption.keys.ttl", String.valueOf(3600000)); // 1 hour
+        this.setDefault("sds.encryption.keys.ttl", String.valueOf(600000)); // 10 minutes
         this.setDefault("sds.useracount.ttl", String.valueOf(3600000)); // 1 hour
         this.setDefault("sds.delete.dataroom.enable", String.valueOf(true));
         this.setDefault("sds.upload.sharelinks.keep", String.valueOf(true));
         this.setDefault("sds.upload.s3.enable", String.valueOf(true));
         this.setDefault("sds.versioning.references.enable", String.valueOf(false));
         this.setDefault("sds.upload.s3.status.period", String.valueOf(1000)); // 1 second
-        this.setDefault("sds.oauth.migrate.enable", String.valueOf(false));
+        this.setDefault("sds.oauth.migrate.enable", String.valueOf(true));
 
         this.setDefault("spectra.retry.delay", String.valueOf(60)); // 1 minute
 
@@ -831,6 +838,7 @@ public abstract class Preferences implements Locales {
         this.setDefault("brick.pairing.nickname.configure", String.valueOf(false));
         this.setDefault("brick.pairing.hostname.configure", String.valueOf(true));
         this.setDefault("brick.pairing.interval.ms", String.valueOf(1000L));
+        this.setDefault("brick.pairing.interrupt.ms", String.valueOf(10 * 60 * 1000L)); // 10min
 
         this.setDefault("dropbox.upload.chunksize", String.valueOf(150 * 1024L * 1024L));
         this.setDefault("dropbox.business.enable", String.valueOf(true));
@@ -841,7 +849,7 @@ public abstract class Preferences implements Locales {
         this.setDefault("webdav.ntlm.domain", StringUtils.EMPTY);
         this.setDefault("webdav.ntlm.workstation", StringUtils.EMPTY);
 
-        /**
+        /*
          * Enable Integrated Windows Authentication (IWA) for target server authentication
          */
         this.setDefault("webdav.ntlm.windows.authentication.enable", String.valueOf(false));
@@ -918,7 +926,7 @@ public abstract class Preferences implements Locales {
         this.setDefault("transfer.connection.retry.delay", String.valueOf(0));
         this.setDefault("connection.retry.backoff.enable", String.valueOf(false));
 
-        /**
+        /*
          * Enable login prompt in connect retry
          */
         this.setDefault("connection.retry.login.enable", String.valueOf(true));
@@ -1152,7 +1160,7 @@ public abstract class Preferences implements Locales {
 
     public Map<String, String> getMap(final String property) {
         final List<String> list = this.getList(property);
-        final Map<String, String> table = new HashMap<String, String>();
+        final Map<String, String> table = new HashMap<>();
         for(String m : list) {
             if(StringUtils.isBlank(m)) {
                 continue;

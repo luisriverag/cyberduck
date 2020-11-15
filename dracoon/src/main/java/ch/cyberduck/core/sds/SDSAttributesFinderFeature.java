@@ -46,6 +46,7 @@ public class SDSAttributesFinderFeature implements AttributesFinder {
 
     public static final String KEY_CNT_DOWNLOADSHARES = "count_downloadshares";
     public static final String KEY_CNT_UPLOADSHARES = "count_uploadshares";
+    public static final String KEY_ENCRYPTED = "encrypted";
 
     private final PathContainerService containerService
         = new SDSPathContainerService();
@@ -80,12 +81,12 @@ public class SDSAttributesFinderFeature implements AttributesFinder {
         }
         try {
             if(file.attributes().isDuplicate()) {
-                final DeletedNode node = new NodesApi(session.getClient()).getFsDeletedNode(Long.parseLong(nodeid.getFileid(file, new DisabledListProgressListener())),
+                final DeletedNode node = new NodesApi(session.getClient()).requestDeletedNode(Long.parseLong(nodeid.getFileid(file, new DisabledListProgressListener())),
                     StringUtils.EMPTY, null);
                 return this.toAttributes(node);
             }
             else {
-                final Node node = new NodesApi(session.getClient()).getFsNode(
+                final Node node = new NodesApi(session.getClient()).requestNode(
                     Long.parseLong(nodeid.getFileid(file, new DisabledListProgressListener())), StringUtils.EMPTY, null);
                 final PathAttributes attr = this.toAttributes(node);
                 if(references) {
@@ -110,10 +111,10 @@ public class SDSAttributesFinderFeature implements AttributesFinder {
             DeletedNodeVersionsList nodes;
             final AttributedList<Path> versions = new AttributedList<>();
             do {
-                nodes = new NodesApi(session.getClient()).getFsDeletedNodeVersions(file.getName(),
+                nodes = new NodesApi(session.getClient()).requestDeletedNodeVersions(
                     Long.parseLong(nodeid.getFileid(file.getParent(), new DisabledListProgressListener())),
-                    file.isFile() ? "file" : "folder", StringUtils.EMPTY, null,
-                    chunksize, offset, null);
+                    file.isFile() ? "file" : "folder", file.getName(), StringUtils.EMPTY, null,
+                    offset, chunksize, null);
                 for(DeletedNode item : nodes.getItems()) {
                     versions.add(new Path(file.getParent(), file.getName(), file.getType(),
                         this.toAttributes(item)));
@@ -133,9 +134,16 @@ public class SDSAttributesFinderFeature implements AttributesFinder {
         attributes.setVersionId(String.valueOf(node.getId()));
         attributes.setRevision(node.getBranchVersion());
         attributes.setChecksum(Checksum.parse(node.getHash()));
-        attributes.setCreationDate(node.getCreatedAt() != null ? node.getCreatedAt().getMillis() : -1L);
+        // Legacy
         attributes.setModificationDate(node.getUpdatedAt() != null ? node.getUpdatedAt().getMillis() : -1L);
+        // Override for >4.22
+        attributes.setModificationDate(node.getTimestampModification() != null ? node.getTimestampModification().getMillis() : -1L);
+        // Legacy
+        attributes.setCreationDate(node.getCreatedAt() != null ? node.getCreatedAt().getMillis() : -1L);
+        // Override for >4.22
+        attributes.setCreationDate(node.getTimestampCreation() != null ? node.getTimestampCreation().getMillis() : -1L);
         attributes.setSize(node.getSize());
+        attributes.setQuota(node.getQuota());
         attributes.setPermission(this.toPermission(node));
         attributes.setOwner(node.getUpdatedBy().getDisplayName());
         attributes.setAcl(this.toAcl(node));
@@ -145,6 +153,9 @@ public class SDSAttributesFinderFeature implements AttributesFinder {
         }
         if(null != node.getCntUploadShares()) {
             custom.put(KEY_CNT_UPLOADSHARES, String.valueOf(node.getCntUploadShares()));
+        }
+        if(null != node.isIsEncrypted()) {
+            custom.put(KEY_ENCRYPTED, String.valueOf(node.isIsEncrypted()));
         }
         attributes.setCustom(custom);
         return attributes;
@@ -184,6 +195,9 @@ public class SDSAttributesFinderFeature implements AttributesFinder {
         if(node.isIsEncrypted() && node.getType() == Node.TypeEnum.FILE) {
             if(null != session.keyPair()) {
                 permission.setUser(permission.getUser().or(Permission.Action.read));
+            }
+            else {
+                log.warn(String.format("Missing read permission for node %s with missing key pair", node));
             }
         }
         else {

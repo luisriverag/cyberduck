@@ -18,7 +18,7 @@
     <parent>
         <groupId>ch.cyberduck</groupId>
         <artifactId>parent</artifactId>
-        <version>7.5.1-SNAPSHOT</version>
+        <version>7.7.1-SNAPSHOT</version>
     </parent>
     <artifactId>core</artifactId>
     <packaging>jar</packaging>
@@ -115,7 +115,7 @@
         </dependency>
         <dependency>
             <groupId>net.java.dev.jna</groupId>
-            <artifactId>jna</artifactId>
+            <artifactId>jna-min</artifactId>
         </dependency>
         <dependency>
             <groupId>net.java.dev.jna</groupId>
@@ -128,7 +128,7 @@
         <dependency>
             <groupId>com.nulab-inc</groupId>
             <artifactId>zxcvbn</artifactId>
-            <version>1.3.0</version>
+            <version>1.3.1</version>
         </dependency>
         <dependency>
             <groupId>com.joyent.util</groupId>
@@ -137,7 +137,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.13</version>
+            <version>4.13.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

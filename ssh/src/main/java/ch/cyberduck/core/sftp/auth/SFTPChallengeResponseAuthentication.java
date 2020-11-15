@@ -26,7 +26,6 @@ import ch.cyberduck.core.StringAppender;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.LoginCanceledException;
 import ch.cyberduck.core.sftp.SFTPExceptionMappingService;
-import ch.cyberduck.core.sftp.SFTPSession;
 import ch.cyberduck.core.threading.CancelCallback;
 
 import org.apache.commons.lang3.StringUtils;
@@ -39,6 +38,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
+import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.userauth.method.AuthKeyboardInteractive;
 import net.schmizz.sshj.userauth.method.ChallengeResponseProvider;
 import net.schmizz.sshj.userauth.password.Resource;
@@ -48,10 +48,10 @@ public class SFTPChallengeResponseAuthentication implements AuthenticationProvid
 
     private static final Pattern DEFAULT_PROMPT_PATTERN = Pattern.compile(".*[pP]assword.*", Pattern.DOTALL);
 
-    private final SFTPSession session;
+    private final SSHClient client;
 
-    public SFTPChallengeResponseAuthentication(final SFTPSession session) {
-        this.session = session;
+    public SFTPChallengeResponseAuthentication(final SSHClient client) {
+        this.client = client;
     }
 
     @Override
@@ -62,7 +62,8 @@ public class SFTPChallengeResponseAuthentication implements AuthenticationProvid
         final AtomicBoolean canceled = new AtomicBoolean();
         final AtomicBoolean publickey = new AtomicBoolean();
         try {
-            session.getClient().auth(bookmark.getCredentials().getUsername(), new AuthKeyboardInteractive(new ChallengeResponseProvider() {
+            final Credentials credentials = bookmark.getCredentials();
+            client.auth(credentials.getUsername(), new AuthKeyboardInteractive(new ChallengeResponseProvider() {
                 private String name = StringUtils.EMPTY;
                 private String instruction = StringUtils.EMPTY;
 
@@ -87,22 +88,22 @@ public class SFTPChallengeResponseAuthentication implements AuthenticationProvid
                         log.debug(String.format("Reply to challenge name %s with instruction %s", name, instruction));
                     }
                     if(DEFAULT_PROMPT_PATTERN.matcher(prompt).matches()) {
-                        if(StringUtils.isBlank(bookmark.getCredentials().getPassword())) {
+                        if(StringUtils.isBlank(credentials.getPassword())) {
                             try {
-                                final Credentials input = callback.prompt(bookmark, bookmark.getCredentials().getUsername(),
+                                final Credentials input = callback.prompt(bookmark, credentials.getUsername(),
                                     String.format("%s %s", LocaleFactory.localizedString("Login", "Login"), bookmark.getHostname()),
                                     MessageFormat.format(LocaleFactory.localizedString(
                                         "Login {0} with username and password", "Credentials"), BookmarkNameProvider.toString(bookmark)),
                                     // Change of username or service not allowed
                                     new LoginOptions(bookmark.getProtocol()).user(false));
                                 if(input.isPublicKeyAuthentication()) {
-                                    bookmark.getCredentials().setIdentity(input.getIdentity());
+                                    credentials.setIdentity(input.getIdentity());
                                     publickey.set(true);
                                     // Return null to cancel if user wants to use public key auth
                                     return StringUtils.EMPTY.toCharArray();
                                 }
-                                bookmark.getCredentials().setSaved(input.isSaved());
-                                bookmark.getCredentials().setPassword(input.getPassword());
+                                credentials.setSaved(input.isSaved());
+                                credentials.setPassword(input.getPassword());
                             }
                             catch(LoginCanceledException e) {
                                 canceled.set(true);
@@ -110,7 +111,7 @@ public class SFTPChallengeResponseAuthentication implements AuthenticationProvid
                                 return StringUtils.EMPTY.toCharArray();
                             }
                         }
-                        return bookmark.getCredentials().getPassword().toCharArray();
+                        return credentials.getPassword().toCharArray();
                     }
                     else {
                         final StringAppender message = new StringAppender().append(instruction).append(prompt);
@@ -147,14 +148,14 @@ public class SFTPChallengeResponseAuthentication implements AuthenticationProvid
         }
         catch(IOException e) {
             if(publickey.get()) {
-                return new SFTPPublicKeyAuthentication(session).authenticate(bookmark, callback, cancel);
+                return new SFTPPublicKeyAuthentication(client).authenticate(bookmark, callback, cancel);
             }
             if(canceled.get()) {
                 throw new LoginCanceledException();
             }
             throw new SFTPExceptionMappingService().map(e);
         }
-        return session.getClient().isAuthenticated();
+        return client.isAuthenticated();
     }
 
     @Override

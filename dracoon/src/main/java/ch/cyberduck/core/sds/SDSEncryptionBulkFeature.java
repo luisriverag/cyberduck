@@ -29,10 +29,13 @@ import ch.cyberduck.core.transfer.Transfer;
 import ch.cyberduck.core.transfer.TransferItem;
 import ch.cyberduck.core.transfer.TransferStatus;
 
+import org.apache.log4j.Logger;
+
 import java.util.HashMap;
 import java.util.Map;
 
 public class SDSEncryptionBulkFeature implements Bulk<Void> {
+    private static final Logger log = Logger.getLogger(SDSEncryptionBulkFeature.class);
 
     private final SDSSession session;
     private final SDSNodeIdProvider nodeid;
@@ -53,7 +56,7 @@ public class SDSEncryptionBulkFeature implements Bulk<Void> {
                     final Path container = new PathContainerService().getContainer(entry.getKey().remote);
                     if(rooms.get(container)) {
                         final TransferStatus status = entry.getValue();
-                        nodeid.setFileKey(status);
+                        status.setFilekey(nodeid.getFileKey());
                     }
                 }
             }
@@ -87,9 +90,13 @@ public class SDSEncryptionBulkFeature implements Bulk<Void> {
                             final Path file = entry.getKey().remote;
                             final Path container = new PathContainerService().getContainer(file);
                             if(rooms.get(container)) {
-                                final VersionId version = entry.getValue().getVersion();
+                                final TransferStatus status = entry.getValue();
+                                final VersionId version = status.getVersion();
                                 if(null != version) {
                                     background.operate(session, callback, file.withAttributes(new PathAttributes(file.attributes()).withVersionId(version.id)));
+                                }
+                                else {
+                                    log.warn(String.format("Missing fileid in transfer status %s for file %s", status, file));
                                 }
                             }
                         }

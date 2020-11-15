@@ -29,16 +29,29 @@ import org.rococoa.cocoa.foundation.NSSize;
 
 /// <i>native declaration : :10</i>
 public abstract class NSToolbarItem extends NSObject implements NSCopying, NSValidatedUserInterfaceItem {
+
     private static final _Class CLASS = org.rococoa.Rococoa.createClass("NSToolbarItem", _Class.class);
 
     public static final String NSToolbarFlexibleItemIdentifier = "NSToolbarFlexibleSpaceItem";
+
+    /**
+     * In macOS 10.7 and later the separator icon has been removed from the toolbar and customization palettes. This
+     * constant is ignored.
+     */
     public static final String NSToolbarSeparatorItemIdentifier = "NSToolbarSeparatorItem";
+    /**
+     * Creates a new NSTrackingSeparatorToolbarItem and automatically configures it to track the divider of the sidebar
+     * if one is discovered.
+     */
+    public static final String NSToolbarSidebarTrackingSeparatorItemIdentifier = "NSToolbarSidebarTrackingSeparatorItem";
     public static final String NSToolbarSpaceItemIdentifier = "NSToolbarSpaceItem";
     public static final String NSToolbarFlexibleSpaceItemIdentifier = "NSToolbarFlexibleSpaceItem";
     public static final String NSToolbarShowColorsItemIdentifier = "NSToolbarShowColorsItem";
     public static final String NSToolbarShowFontsItemIdentifier = "NSToolbarShowFontsItem";
     public static final String NSToolbarCustomizeToolbarItemIdentifier = "NSToolbarCustomizeToolbarItem";
     public static final String NSToolbarPrintItemIdentifier = "NSToolbarPrintItem";
+    public static final String NSToolbarToggleSidebarItemIdentifier = "NSToolbarToggleSidebarItem";
+    public static final String NSToolbarCloudSharingItemIdentifier = "NSToolbarCloudSharingItem";
 
     public static final int VisibilityPriorityStandard = 0;
     public static final int VisibilityPriorityLow = -1000;
@@ -233,4 +246,20 @@ public abstract class NSToolbarItem extends NSObject implements NSCopying, NSVal
      * <i>native declaration : :145</i>
      */
     public abstract boolean allowsDuplicatesInToolbar();
+
+    /**
+     * The system can position navigation items outside of the normal list of items in the toolbar. You specify the
+     * order of the items using toolbarDefaultItemIdentifiers:.
+     *
+     * @return A Boolean value that indicates whether the item behaves as a navigation item in the toolbar.
+     */
+    public abstract boolean isNavigational();
+
+    /**
+     * The system can position navigation items outside of the normal list of items in the toolbar. You specify the
+     * order of the items using toolbarDefaultItemIdentifiers:.
+     *
+     * @param value A Boolean value that indicates whether the item behaves as a navigation item in the toolbar.
+     */
+    public abstract void setNavigational(boolean value);
 }

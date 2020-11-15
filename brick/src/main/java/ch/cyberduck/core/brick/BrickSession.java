@@ -65,6 +65,7 @@ public class BrickSession extends DAVSession {
     public DAVClient connect(final Proxy proxy, final HostKeyCallback key, final LoginCallback prompt) throws BackgroundException {
         final HttpClientBuilder configuration = builder.build(proxy, this, prompt);
         configuration.setRedirectStrategy(new DAVRedirectStrategy(new PreferencesRedirectCallback()));
+        configuration.setServiceUnavailableRetryStrategy(new BrickUnauthorizedRetryStrategy(this, prompt));
         return new DAVClient(new HostUrlProvider().withUsername(false).get(host), configuration);
     }
 
@@ -73,7 +74,7 @@ public class BrickSession extends DAVSession {
         final Credentials credentials = host.getCredentials();
         if(!credentials.isPasswordAuthentication()) {
             // No prompt on explicit connect
-            this.pair(host, new DisabledConnectionCallback(), cancel);
+            this.pair(host, new DisabledConnectionCallback(), cancel).setSaved(true);
         }
         try {
             super.login(proxy, prompt, cancel);
@@ -87,6 +88,9 @@ public class BrickSession extends DAVSession {
 
     public Credentials pair(final Host bookmark, final ConnectionCallback prompt, final CancelCallback cancel) throws BackgroundException {
         final String token = new BrickCredentialsConfigurator().configure(host).getToken();
+        if(log.isDebugEnabled()) {
+            log.debug(String.format("Attempt pairing with token %s", token));
+        }
         final BrickPairingSchedulerFeature scheduler = new BrickPairingSchedulerFeature(this, token, bookmark, cancel);
         // Operate in background until canceled
         final ConnectionCallback lock = new DisabledConnectionCallback() {
@@ -152,4 +156,5 @@ public class BrickSession extends DAVSession {
         }
         return super._getFeature(type);
     }
+
 }

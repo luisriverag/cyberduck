@@ -23,6 +23,7 @@ import ch.cyberduck.binding.application.NSImage;
 import ch.cyberduck.binding.application.NSMenu;
 import ch.cyberduck.binding.application.NSMenuItem;
 import ch.cyberduck.binding.application.NSPopUpButton;
+import ch.cyberduck.binding.application.NSSearchToolbarItem;
 import ch.cyberduck.binding.application.NSSegmentedControl;
 import ch.cyberduck.binding.application.NSToolbarItem;
 import ch.cyberduck.binding.application.NSView;
@@ -32,6 +33,7 @@ import ch.cyberduck.binding.foundation.NSString;
 import ch.cyberduck.core.AbstractHostCollection;
 import ch.cyberduck.core.BookmarkNameProvider;
 import ch.cyberduck.core.DefaultCharsetProvider;
+import ch.cyberduck.core.Factory;
 import ch.cyberduck.core.LocaleFactory;
 import ch.cyberduck.core.local.Application;
 import ch.cyberduck.core.local.ApplicationFinder;
@@ -68,7 +70,7 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
         @Override
         public NSObject comboBox_objectValueForItemAtIndex(final NSComboBox sender, final NSInteger row) {
             return NSString.stringWithString(
-                    BookmarkNameProvider.toString(bookmarks.get(row.intValue()))
+                BookmarkNameProvider.toString(bookmarks.get(row.intValue()))
             );
         }
     }
@@ -136,6 +138,23 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
             @Override
             public String tooltip() {
                 return LocaleFactory.localizedString("Connect to server");
+            }
+        },
+        search {
+            @Override
+            public Selector action() {
+                return Foundation.selector("searchFieldTextDidChange:");
+            }
+        },
+        tabswitch {
+            @Override
+            public String label() {
+                return StringUtils.EMPTY;
+            }
+
+            @Override
+            public Selector action() {
+                return Foundation.selector("bookmarkSwitchButtonClicked:");
             }
         },
         tools {
@@ -392,6 +411,12 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
             public Selector action() {
                 return Foundation.selector("quicklookButtonClicked:");
             }
+        },
+        cryptomator {
+            @Override
+            public Selector action() {
+                return Foundation.selector("lockUnlockEncryptedVaultButtonClicked:");
+            }
         };
 
         public String label() {
@@ -411,17 +436,15 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
     }
 
     private final Preferences preferences
-            = PreferencesFactory.get();
+        = PreferencesFactory.get();
 
     private final BrowserController controller;
 
     /**
-     * Keep reference to weak toolbar items. A toolbar may ask again for a kind of toolbar
-     * item already supplied to it, in which case this method may return the same toolbar
-     * item it returned before
+     * Keep reference to weak toolbar items. A toolbar may ask again for a kind of toolbar item already supplied to it,
+     * in which case this method may return the same toolbar item it returned before
      */
-    private final Map<String, NSToolbarItem> toolbarItems
-            = new HashMap<String, NSToolbarItem>();
+    private final Map<String, NSToolbarItem> toolbarItems = new HashMap<>();
 
 
     public BrowserToolbarFactory(final BrowserController controller, final AbstractHostCollection bookmarks) {
@@ -432,7 +455,16 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
     @Override
     public NSToolbarItem create(final String identifier) {
         if(!toolbarItems.containsKey(identifier)) {
-            toolbarItems.put(identifier, CDToolbarItem.itemWithIdentifier(identifier));
+            switch(BrowserToolbarItem.valueOf(identifier)) {
+                case search:
+                    if(!Factory.Platform.osversion.matches("10\\.(9|10|11|12|13|14|15).*")) {
+                        toolbarItems.put(identifier, NSSearchToolbarItem.itemWithIdentifier(identifier));
+                        break;
+                    }
+                    // Break through
+                default:
+                    toolbarItems.put(identifier, CDToolbarItem.itemWithIdentifier(identifier));
+            }
         }
         final NSToolbarItem item = toolbarItems.get(identifier);
         try {
@@ -456,10 +488,10 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
                     // Add a menu representation for text mode of toolbar
                     NSMenuItem toolbarMenu = NSMenuItem.itemWithTitle(browserview.label(), null, StringUtils.EMPTY);
                     menu.addItemWithTitle_action_keyEquivalent(LocaleFactory.localizedString("List"),
-                            Foundation.selector("browserSwitchMenuClicked:"), StringUtils.EMPTY);
+                        Foundation.selector("browserSwitchMenuClicked:"), StringUtils.EMPTY);
                     menu.itemWithTitle(LocaleFactory.localizedString("List")).setTag(BrowserController.BrowserSwitchSegement.list.ordinal());
                     menu.addItemWithTitle_action_keyEquivalent(LocaleFactory.localizedString("Outline"),
-                            Foundation.selector("browserSwitchMenuClicked:"), StringUtils.EMPTY);
+                        Foundation.selector("browserSwitchMenuClicked:"), StringUtils.EMPTY);
                     menu.itemWithTitle(LocaleFactory.localizedString("Outline")).setTag(BrowserController.BrowserSwitchSegement.outline.ordinal());
                     toolbarMenu.setSubmenu(menu);
                     item.setView(button);
@@ -511,7 +543,7 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
                     item.setToolTip(encoding.tooltip());
                     // Add a menu representation for text mode of toolbar
                     NSMenuItem toolbarMenu = NSMenuItem.itemWithTitle(LocaleFactory.localizedString(encoding.label()),
-                            encoding.action(), StringUtils.EMPTY);
+                        encoding.action(), StringUtils.EMPTY);
                     final String[] charsets = new DefaultCharsetProvider().availableCharsets();
                     NSMenu charsetMenu = NSMenu.menu();
                     for(String charset : charsets) {
@@ -566,15 +598,42 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
                     return item;
                 }
                 case quicklook: {
-                    item.setLabel(BrowserToolbarItem.quicklook.label());
-                    item.setPaletteLabel(BrowserToolbarItem.quicklook.label());
+                    item.setLabel(quicklook.label());
+                    item.setPaletteLabel(quicklook.label());
                     final NSButton button = NSButton.buttonWithFrame(new NSRect(0, 0));
                     button.setBezelStyle(NSButtonCell.NSTexturedRoundedBezelStyle);
-                    button.setImage(BrowserToolbarItem.quicklook.image());
+                    button.setImage(quicklook.image());
                     button.sizeToFit();
                     button.setTarget(controller.id());
-                    button.setAction(BrowserToolbarItem.quicklook.action());
+                    button.setAction(quicklook.action());
                     item.setView(button);
+                    return item;
+                }
+                case cryptomator: {
+                    item.setLabel(cryptomator.label());
+                    item.setPaletteLabel(LocaleFactory.localizedString("Unlock Vault", "Cryptomator"));
+                    final NSButton button = NSButton.buttonWithFrame(new NSRect(0, 0));
+                    button.setBezelStyle(NSButtonCell.NSTexturedRoundedBezelStyle);
+                    button.setImage(IconCacheFactory.<NSImage>get().iconNamed("NSLockLockedTemplate"));
+                    button.sizeToFit();
+                    button.setTarget(controller.id());
+                    button.setAction(cryptomator.action());
+                    item.setView(button);
+                    return item;
+                }
+                case search: {
+                    item.setLabel(search.label());
+                    item.setPaletteLabel(search.label());
+                    item.setView(controller.getSearchField());
+                    return item;
+                }
+                case tabswitch: {
+                    item.setLabel(tabswitch.label());
+                    item.setPaletteLabel(tabswitch.label());
+                    item.setView(controller.getBookmarkSwitchView());
+                    if(item.respondsToSelector(Foundation.selector("setNavigational:"))) {
+                        item.setNavigational(true);
+                    }
                     return item;
                 }
                 default: {
@@ -601,45 +660,47 @@ public class BrowserToolbarFactory extends AbstractToolbarFactory implements Too
     @Override
     public NSArray getDefault() {
         return NSArray.arrayWithObjects(
-                connect.name(),
-                NSToolbarItem.NSToolbarSeparatorItemIdentifier,
-                quickconnect.name(),
-                tools.name(),
-                NSToolbarItem.NSToolbarSeparatorItemIdentifier,
-                reload.name(),
-                edit.name(),
-                NSToolbarItem.NSToolbarFlexibleSpaceItemIdentifier,
-                disconnect.name()
+            connect.name(),
+            tabswitch.name(),
+            tools.name(),
+            reload.name(),
+            edit.name(),
+            NSToolbarItem.NSToolbarFlexibleSpaceItemIdentifier,
+            search.name(),
+            disconnect.name()
         );
     }
 
     @Override
     public NSArray getAllowed() {
         return NSArray.arrayWithObjects(
-                connect.name(),
-                browserview.name(),
-                transfers.name(),
-                quickconnect.name(),
-                tools.name(),
-                reload.name(),
-                encoding.name(),
-                synchronize.name(),
-                download.name(),
-                upload.name(),
-                edit.name(),
-                delete.name(),
-                newfolder.name(),
-                addbookmark.name(),
-                info.name(),
-                webbrowser.name(),
-                terminal.name(),
-                archive.name(),
-                BrowserToolbarItem.quicklook.name(),
-                disconnect.name(),
-                NSToolbarItem.NSToolbarCustomizeToolbarItemIdentifier,
-                NSToolbarItem.NSToolbarSpaceItemIdentifier,
-                NSToolbarItem.NSToolbarSeparatorItemIdentifier,
-                NSToolbarItem.NSToolbarFlexibleSpaceItemIdentifier
+            tabswitch.name(),
+            connect.name(),
+            browserview.name(),
+            transfers.name(),
+            quickconnect.name(),
+            tools.name(),
+            reload.name(),
+            encoding.name(),
+            synchronize.name(),
+            download.name(),
+            upload.name(),
+            edit.name(),
+            delete.name(),
+            newfolder.name(),
+            addbookmark.name(),
+            info.name(),
+            webbrowser.name(),
+            terminal.name(),
+            archive.name(),
+            quicklook.name(),
+            cryptomator.name(),
+            search.name(),
+            disconnect.name(),
+            NSToolbarItem.NSToolbarCustomizeToolbarItemIdentifier,
+            NSToolbarItem.NSToolbarSpaceItemIdentifier,
+            NSToolbarItem.NSToolbarSeparatorItemIdentifier,
+            NSToolbarItem.NSToolbarFlexibleSpaceItemIdentifier
         );
     }
 }

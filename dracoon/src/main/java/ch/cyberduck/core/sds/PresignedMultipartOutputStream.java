@@ -65,9 +65,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.dracoon.sdk.crypto.Crypto;
-import com.dracoon.sdk.crypto.CryptoSystemException;
-import com.dracoon.sdk.crypto.InvalidFileKeyException;
-import com.dracoon.sdk.crypto.InvalidKeyPairException;
+import com.dracoon.sdk.crypto.error.CryptoSystemException;
+import com.dracoon.sdk.crypto.error.InvalidFileKeyException;
+import com.dracoon.sdk.crypto.error.InvalidKeyPairException;
+import com.dracoon.sdk.crypto.error.UnknownVersionException;
 import com.dracoon.sdk.crypto.model.EncryptedFileKey;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.google.common.util.concurrent.Uninterruptibles;
@@ -211,7 +212,7 @@ public class PresignedMultipartOutputStream extends OutputStream {
                         public void run() {
                             try {
                                 final S3FileUploadStatus uploadStatus = new NodesApi(session.getClient())
-                                    .getUploadStatus(createFileUploadResponse.getUploadId(), StringUtils.EMPTY);
+                                    .requestUploadStatusFiles(createFileUploadResponse.getUploadId(), StringUtils.EMPTY);
                                 switch(uploadStatus.getStatus()) {
                                     case "finishing":
                                         // Expected
@@ -240,7 +241,7 @@ public class PresignedMultipartOutputStream extends OutputStream {
                         throw failure.get();
                     }
                 }
-                catch(CryptoSystemException | InvalidFileKeyException | InvalidKeyPairException e) {
+                catch(CryptoSystemException | InvalidFileKeyException | InvalidKeyPairException | UnknownVersionException e) {
                     throw new TripleCryptExceptionMappingService().map("Upload {0} failed", e, file);
                 }
                 catch(ApiException e) {

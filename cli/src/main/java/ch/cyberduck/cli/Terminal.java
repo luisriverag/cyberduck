@@ -41,6 +41,7 @@ import ch.cyberduck.core.local.ApplicationFinder;
 import ch.cyberduck.core.local.ApplicationFinderFactory;
 import ch.cyberduck.core.local.ApplicationQuitCallback;
 import ch.cyberduck.core.local.TemporaryFileServiceFactory;
+import ch.cyberduck.core.logging.LoggerPrintStream;
 import ch.cyberduck.core.manta.MantaProtocol;
 import ch.cyberduck.core.nextcloud.NextcloudProtocol;
 import ch.cyberduck.core.nio.LocalProtocol;
@@ -71,6 +72,7 @@ import ch.cyberduck.core.transfer.TransferPrompt;
 import ch.cyberduck.core.transfer.TransferSpeedometer;
 import ch.cyberduck.core.vault.LoadingVaultLookupListener;
 import ch.cyberduck.core.vault.VaultRegistryFactory;
+import ch.cyberduck.core.worker.AttributesWorker;
 import ch.cyberduck.core.worker.CreateDirectoryWorker;
 import ch.cyberduck.core.worker.DeleteWorker;
 import ch.cyberduck.core.worker.HomeFinderWorker;
@@ -98,6 +100,11 @@ import com.google.common.util.concurrent.Uninterruptibles;
 
 public class Terminal {
     private static final Logger log = Logger.getLogger(Terminal.class);
+
+    static {
+        System.err.close();
+        System.setErr(new LoggerPrintStream());
+    }
 
     private final Preferences preferences;
     private final TerminalController controller;
@@ -255,7 +262,7 @@ public class Terminal {
             final Host host = new CommandLineUriParser(input, protocols).parse(uri);
             final LoginConnectionService connect = new LoginConnectionService(new TerminalLoginService(input
             ), new TerminalLoginCallback(reader), new TerminalHostKeyVerifier(reader), progress);
-            source = SessionPoolFactory.create(connect, transcript, cache, host,
+            source = SessionPoolFactory.create(connect, transcript, host,
                 new CertificateStoreX509TrustManager(new DisabledCertificateTrustCallback(), new DefaultTrustManagerHostnameCallback(host), new TerminalCertificateStore(reader)),
                 new PreferencesX509KeyManager(host, new TerminalCertificateStore(reader)),
                 VaultRegistryFactory.create(new TerminalPasswordCallback()));
@@ -266,6 +273,16 @@ public class Terminal {
             }
             else {
                 remote = new CommandLinePathParser(input).parse(uri);
+            }
+            switch(action) {
+                case edit:
+                case download:
+                case copy:
+                case synchronize:
+                case delete:
+                    // Set remote file attributes
+                    remote.withAttributes(this.execute(new TerminalBackgroundAction<>(controller, source, new AttributesWorker(remote))));
+                    break;
             }
             if(input.hasOption(TerminalOptionsBuilder.Params.vault.name())) {
                 final Path vault;
@@ -308,7 +325,7 @@ public class Terminal {
                         source, SessionPool.DISCONNECTED);
                 case copy:
                     final Host target = new CommandLineUriParser(input).parse(input.getOptionValues(action.name())[1]);
-                    destination = SessionPoolFactory.create(connect, transcript, cache, target,
+                    destination = SessionPoolFactory.create(connect, transcript, target,
                         new CertificateStoreX509TrustManager(new DisabledCertificateTrustCallback(), new DefaultTrustManagerHostnameCallback(target), new TerminalCertificateStore(reader)),
                         new PreferencesX509KeyManager(target, new TerminalCertificateStore(reader)),
                         VaultRegistryFactory.create(new TerminalPasswordCallback()));
@@ -339,33 +356,33 @@ public class Terminal {
 
     protected void configure(final CommandLine input) {
         final boolean preserve = input.hasOption(TerminalOptionsBuilder.Params.preserve.name());
-        preferences.setProperty("queue.upload.permissions.change", preserve);
-        preferences.setProperty("queue.upload.timestamp.change", preserve);
-        preferences.setProperty("queue.download.permissions.change", preserve);
-        preferences.setProperty("queue.download.timestamp.change", preserve);
+        preferences.setDefault("queue.upload.permissions.change", String.valueOf(preserve));
+        preferences.setDefault("queue.upload.timestamp.change", String.valueOf(preserve));
+        preferences.setDefault("queue.download.permissions.change", String.valueOf(preserve));
+        preferences.setDefault("queue.download.timestamp.change", String.valueOf(preserve));
         final boolean retry = input.hasOption(TerminalOptionsBuilder.Params.retry.name());
         if(retry) {
             if(StringUtils.isNotBlank(input.getOptionValue(TerminalOptionsBuilder.Params.retry.name()))) {
-                preferences.setProperty("connection.retry",
-                    NumberUtils.toInt(input.getOptionValue(TerminalOptionsBuilder.Params.retry.name()), 1));
+                preferences.setDefault("connection.retry",
+                    String.valueOf(NumberUtils.toInt(input.getOptionValue(TerminalOptionsBuilder.Params.retry.name()), 1)));
             }
             else {
-                preferences.setProperty("connection.retry", 1);
+                preferences.setDefault("connection.retry", String.valueOf(1));
             }
         }
         else {
-            preferences.setProperty("connection.retry", 0);
+            preferences.setDefault("connection.retry", String.valueOf(0));
         }
         final boolean udt = input.hasOption(TerminalOptionsBuilder.Params.udt.name());
         if(udt) {
-            preferences.setProperty("s3.download.udt.threshold", 0L);
-            preferences.setProperty("s3.upload.udt.threshold", 0L);
+            preferences.setDefault("s3.download.udt.threshold", String.valueOf(0L));
+            preferences.setDefault("s3.upload.udt.threshold", String.valueOf(0L));
         }
         if(input.hasOption(TerminalOptionsBuilder.Params.parallel.name())) {
-            preferences.setProperty("queue.connections.limit",
-                NumberUtils.toInt(input.getOptionValue(TerminalOptionsBuilder.Params.parallel.name()), 2));
+            preferences.setDefault("queue.connections.limit",
+                String.valueOf(NumberUtils.toInt(input.getOptionValue(TerminalOptionsBuilder.Params.parallel.name()), 2)));
         }
-        preferences.setProperty("connection.login.keychain", !input.hasOption(TerminalOptionsBuilder.Params.nokeychain.name()));
+        preferences.setDefault("connection.login.keychain", String.valueOf(!input.hasOption(TerminalOptionsBuilder.Params.nokeychain.name())));
     }
 
     protected Exit transfer(final Transfer transfer, final SessionPool source, final SessionPool destination) {

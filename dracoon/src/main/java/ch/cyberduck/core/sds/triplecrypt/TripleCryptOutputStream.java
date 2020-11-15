@@ -24,6 +24,7 @@ import ch.cyberduck.core.sds.io.swagger.client.model.FileKey;
 import ch.cyberduck.core.transfer.TransferStatus;
 
 import org.apache.commons.io.output.ProxyOutputStream;
+import org.apache.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -31,22 +32,23 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import com.dracoon.sdk.crypto.CryptoException;
-import com.dracoon.sdk.crypto.CryptoSystemException;
 import com.dracoon.sdk.crypto.CryptoUtils;
 import com.dracoon.sdk.crypto.FileEncryptionCipher;
+import com.dracoon.sdk.crypto.error.CryptoException;
+import com.dracoon.sdk.crypto.error.CryptoSystemException;
 import com.dracoon.sdk.crypto.model.EncryptedDataContainer;
 import com.dracoon.sdk.crypto.model.PlainDataContainer;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 
 public class TripleCryptOutputStream<VersionId> extends HttpResponseOutputStream<VersionId> {
+    private static final Logger log = Logger.getLogger(TripleCryptOutputStream.class);
 
     private final StatusOutputStream<VersionId> proxy;
 
     public TripleCryptOutputStream(final SDSSession session, final StatusOutputStream<VersionId> proxy, final FileEncryptionCipher cipher, final TransferStatus key) {
         super(new MemorySegementingOutputStream(new EncryptingOutputStream(session, proxy, cipher, key),
-                SDSSession.DEFAULT_CHUNKSIZE));
+            SDSSession.DEFAULT_CHUNKSIZE));
         this.proxy = proxy;
     }
 
@@ -107,11 +109,17 @@ public class TripleCryptOutputStream<VersionId> extends HttpResponseOutputStream
                 final String tag = CryptoUtils.byteArrayToString(encrypted.getTag());
                 final ObjectReader reader = session.getClient().getJSON().getContext(null).readerFor(FileKey.class);
                 final FileKey fileKey = reader.readValue(status.getFilekey().array());
-                fileKey.setTag(tag);
-                final ObjectWriter writer = session.getClient().getJSON().getContext(null).writerFor(FileKey.class);
-                final ByteArrayOutputStream out = new ByteArrayOutputStream();
-                writer.writeValue(out, fileKey);
-                status.setFilekey(ByteBuffer.wrap(out.toByteArray()));
+                if(null == fileKey.getTag()) {
+                    // Only override if not already set pre-computed in bulk feature
+                    fileKey.setTag(tag);
+                    final ObjectWriter writer = session.getClient().getJSON().getContext(null).writerFor(FileKey.class);
+                    final ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    writer.writeValue(out, fileKey);
+                    status.setFilekey(ByteBuffer.wrap(out.toByteArray()));
+                }
+                else {
+                    log.warn(String.format("Skip setting tag in file key already found in %s", status));
+                }
             }
             catch(CryptoSystemException e) {
                 throw new IOException(e);

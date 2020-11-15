@@ -26,7 +26,6 @@ import ch.cyberduck.core.SimplePathPredicate;
 import ch.cyberduck.core.URIEncoder;
 import ch.cyberduck.core.exception.BackgroundException;
 import ch.cyberduck.core.exception.NotfoundException;
-import ch.cyberduck.core.features.Encryption;
 import ch.cyberduck.core.features.IdProvider;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.sds.io.swagger.client.ApiException;
@@ -35,7 +34,6 @@ import ch.cyberduck.core.sds.io.swagger.client.model.FileKey;
 import ch.cyberduck.core.sds.io.swagger.client.model.Node;
 import ch.cyberduck.core.sds.io.swagger.client.model.NodeList;
 import ch.cyberduck.core.sds.triplecrypt.TripleCryptConverter;
-import ch.cyberduck.core.transfer.TransferStatus;
 import ch.cyberduck.core.unicode.NFCNormalizer;
 import ch.cyberduck.core.unicode.UnicodeNormalizer;
 
@@ -47,6 +45,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import com.dracoon.sdk.crypto.Crypto;
+import com.dracoon.sdk.crypto.model.PlainFileKey;
 import com.fasterxml.jackson.databind.ObjectWriter;
 
 public class SDSNodeIdProvider implements IdProvider {
@@ -100,10 +99,11 @@ public class SDSNodeIdProvider implements IdProvider {
             int offset = 0;
             NodeList nodes;
             do {
-                nodes = new NodesApi(session.getClient()).searchFsNodes(URIEncoder.encode(normalizer.normalize(file.getName()).toString()),
-                    StringUtils.EMPTY, null, -1,
+                nodes = new NodesApi(session.getClient()).searchNodes(
+                    URIEncoder.encode(normalizer.normalize(file.getName()).toString()),
+                    StringUtils.EMPTY, -1, null,
                     String.format("type:eq:%s|parentPath:eq:%s/", type, file.getParent().isRoot() ? StringUtils.EMPTY : file.getParent().getAbsolute()),
-                    chunksize, offset, null, null);
+                    null, offset, chunksize, null);
                 for(Node node : nodes.getItems()) {
                     if(node.getName().equals(normalizer.normalize(file.getName()).toString())) {
                         if(log.isInfoEnabled()) {
@@ -134,17 +134,32 @@ public class SDSNodeIdProvider implements IdProvider {
         if(file.getType().contains(Path.Type.triplecrypt)) {
             return true;
         }
+        if(file.attributes().getCustom().containsKey(SDSAttributesFinderFeature.KEY_ENCRYPTED)) {
+            return Boolean.parseBoolean(file.attributes().getCustom().get(SDSAttributesFinderFeature.KEY_ENCRYPTED));
+        }
         final Path parent = file.getParent();
         if(parent.getType().contains(Path.Type.triplecrypt)) {
             // Backward compatibility where flag is missing in room
             return true;
         }
+        if(parent.attributes().getCustom().containsKey(SDSAttributesFinderFeature.KEY_ENCRYPTED)) {
+            return Boolean.parseBoolean(parent.attributes().getCustom().get(SDSAttributesFinderFeature.KEY_ENCRYPTED));
+        }
         final Path container = new PathContainerService().getContainer(file);
-        return container.getType().contains(Path.Type.triplecrypt);
+        if(container.getType().contains(Path.Type.triplecrypt)) {
+            return true;
+        }
+        if(container.attributes().getCustom().containsKey(SDSAttributesFinderFeature.KEY_ENCRYPTED)) {
+            return Boolean.parseBoolean(container.attributes().getCustom().get(SDSAttributesFinderFeature.KEY_ENCRYPTED));
+        }
+        return false;
     }
 
-    public void setFileKey(final TransferStatus status) throws BackgroundException {
-        final FileKey fileKey = TripleCryptConverter.toSwaggerFileKey(Crypto.generateFileKey());
+    public ByteBuffer getFileKey() throws BackgroundException {
+        return this.toBuffer(TripleCryptConverter.toSwaggerFileKey(Crypto.generateFileKey(PlainFileKey.Version.AES256GCM)));
+    }
+
+    public ByteBuffer toBuffer(final FileKey fileKey) throws BackgroundException {
         final ObjectWriter writer = session.getClient().getJSON().getContext(null).writerFor(FileKey.class);
         final ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
@@ -153,8 +168,7 @@ public class SDSNodeIdProvider implements IdProvider {
         catch(IOException e) {
             throw new DefaultIOExceptionMappingService().map(e);
         }
-        status.setFilekey(ByteBuffer.wrap(out.toByteArray()));
-        status.setEncryption(new Encryption.Algorithm("AES256", null));
+        return ByteBuffer.wrap(out.toByteArray());
     }
 
     @Override

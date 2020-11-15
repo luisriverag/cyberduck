@@ -85,11 +85,10 @@ public class S3AttributesFinderFeature implements AttributesFinder {
             return attributes;
         }
         try {
-            final String container = containerService.getContainer(file).getName();
             PathAttributes attr;
             try {
                 attr = this.toAttributes(session.getClient().getVersionedObjectDetails(file.attributes().getVersionId(),
-                    container, containerService.getKey(file)));
+                    containerService.getContainer(file).getName(), containerService.getKey(file)));
             }
             catch(ServiceException e) {
                 if(null != e.getResponseHeaders()) {
@@ -128,7 +127,8 @@ public class S3AttributesFinderFeature implements AttributesFinder {
                     // Determine if latest version
                     try {
                         // Duplicate if not latest version
-                        final String latest = this.toAttributes(session.getClient().getObjectDetails(container, containerService.getKey(file))).getVersionId();
+                        final String latest = this.toAttributes(session.getClient().getObjectDetails(
+                            containerService.getContainer(file).getName(), containerService.getKey(file))).getVersionId();
                         attr.setDuplicate(!latest.equals(attr.getVersionId()));
                     }
                     catch(ServiceException e) {
@@ -147,7 +147,7 @@ public class S3AttributesFinderFeature implements AttributesFinder {
             return attr;
         }
         catch(NotfoundException e) {
-            if(file.isPlaceholder()) {
+            if(file.isDirectory()) {
                 // File may be marked as placeholder but not placeholder file exists. Check for common prefix returned.
                 try {
                     new S3ObjectListService(session).list(file, new DisabledListProgressListener(), containerService.getKey(file), 1);

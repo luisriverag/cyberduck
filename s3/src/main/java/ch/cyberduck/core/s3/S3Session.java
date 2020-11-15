@@ -49,6 +49,7 @@ import ch.cyberduck.core.kms.KMSEncryptionFeature;
 import ch.cyberduck.core.preferences.Preferences;
 import ch.cyberduck.core.preferences.PreferencesFactory;
 import ch.cyberduck.core.proxy.Proxy;
+import ch.cyberduck.core.restore.Glacier;
 import ch.cyberduck.core.shared.DelegatingSchedulerFeature;
 import ch.cyberduck.core.shared.DisabledBulkFeature;
 import ch.cyberduck.core.ssl.DefaultX509KeyManager;
@@ -198,11 +199,18 @@ public class S3Session extends HttpSession<RequestEntityRestStorageService> {
     }
 
     public static boolean isAwsHostname(final String hostname) {
-        // Matches s3.amazonaws.com
-        // Matches s3.cn-north-1.amazonaws.com.cn
-        // Matches s3.cn-northwest-1.amazonaws.com.cn
-        // Matches s3-us-gov-west-1.amazonaws.com
-        return hostname.matches("s3(\\.[a-z0-9\\-]+)?\\.amazonaws\\.com(\\.cn)?");
+        return isAwsHostname(hostname, true);
+    }
+
+    public static boolean isAwsHostname(final String hostname, boolean cn) {
+        if(cn) {
+            // Matches s3.amazonaws.com
+            // Matches s3.cn-north-1.amazonaws.com.cn
+            // Matches s3.cn-northwest-1.amazonaws.com.cn
+            // Matches s3-us-gov-west-1.amazonaws.com
+            return hostname.matches("s3(\\.[a-z0-9\\-]+)?\\.amazonaws\\.com(\\.cn)?");
+        }
+        return hostname.matches("s3(\\.[a-z0-9\\-]+)?\\.amazonaws\\.com");
     }
 
     @Override
@@ -325,6 +333,9 @@ public class S3Session extends HttpSession<RequestEntityRestStorageService> {
                     }
                 }
             );
+        }
+        if(type == Restore.class) {
+            return (T) new Glacier(this, trust, key);
         }
         return super._getFeature(type);
     }
