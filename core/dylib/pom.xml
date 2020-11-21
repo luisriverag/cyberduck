@@ -5,7 +5,7 @@
         <groupId>ch.cyberduck</groupId>
         <artifactId>parent</artifactId>
         <relativePath>../../pom.xml</relativePath>
-        <version>7.7.1-SNAPSHOT</version>
+        <version>7.7.2-SNAPSHOT</version>
     </parent>
     <artifactId>libcore</artifactId>
 
@@ -57,7 +57,7 @@
                                             <artifactId>JavaNativeFoundation</artifactId>
                                             <classifier>universal</classifier>
                                             <type>zip</type>
-                                            <version>80</version>
+                                            <version>81</version>
                                         </artifactItem>
                                     </artifactItems>
                                     <outputDirectory>${project.build.directory}</outputDirectory>
