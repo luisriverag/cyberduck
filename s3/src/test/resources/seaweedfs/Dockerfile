@@ -1,1 +1,1 @@
-FROM chrislusf/seaweedfs:4.52
+FROM chrislusf/seaweedfs:4.54
